@@ -13,13 +13,12 @@ interface MessageSummary {
 interface MessageBody {
   id: string;
   subject: string;
-  text: string;
-  html: string;
+  body: string;
 }
 
 interface InboxState {
   email: string;
-  token: string;
+  sidToken: string;
   createdAt: string;
 }
 
@@ -71,11 +70,11 @@ export default function Home() {
     }
   };
 
-  const fetchBody = async (token: string, id: string): Promise<MessageBody | null> => {
+  const fetchBody = async (sidToken: string, id: string): Promise<MessageBody | null> => {
     try {
-      const res = await fetch(`/api/email?messageId=${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        `/api/email?sidToken=${encodeURIComponent(sidToken)}&messageId=${id}`
+      );
       if (!res.ok) return null;
       const body: MessageBody = await res.json();
       setBodies((prev) => ({ ...prev, [id]: body }));
@@ -88,9 +87,7 @@ export default function Home() {
   const fetchInbox = async (current: InboxState | null) => {
     if (!current) return;
     try {
-      const res = await fetch('/api/inbox', {
-        headers: { Authorization: `Bearer ${current.token}` },
-      });
+      const res = await fetch(`/api/inbox?sidToken=${encodeURIComponent(current.sidToken)}`);
       if (!res.ok) return;
       const data = await res.json();
       const list: MessageSummary[] = data.messages || [];
@@ -100,9 +97,9 @@ export default function Home() {
       setMessages(sorted);
 
       for (const m of sorted) {
-        const body = await fetchBody(current.token, m.id);
+        const body = await fetchBody(current.sidToken, m.id);
         if (!body) continue;
-        const plainBody = body.text || (body.html ? stripHtml(body.html) : '');
+        const plainBody = stripHtml(body.body);
         const code = findCode(body.subject || m.subject, plainBody);
         if (code) {
           setFoundCode(code);
@@ -224,10 +221,7 @@ export default function Home() {
             <div className="space-y-4">
               {messages.map((m) => {
                 const body = bodies[m.id];
-                const preview =
-                  m.intro ||
-                  (body && (body.text || (body.html ? stripHtml(body.html) : ''))) ||
-                  '';
+                const preview = m.intro || (body ? stripHtml(body.body) : '');
                 return (
                   <div
                     key={m.id}

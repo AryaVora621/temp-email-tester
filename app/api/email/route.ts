@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const MAIL_TM_BASE = 'https://api.mail.tm';
+const GM_BASE = 'https://api.guerrillamail.com/ajax.php';
 
 export async function GET(req: NextRequest) {
+  const sidToken = req.nextUrl.searchParams.get('sidToken');
   const messageId = req.nextUrl.searchParams.get('messageId');
-  const token = req.headers.get('authorization');
 
-  if (!messageId) {
-    return NextResponse.json({ error: 'messageId required' }, { status: 400 });
-  }
-  if (!token) {
-    return NextResponse.json({ error: 'Missing authorization token' }, { status: 401 });
+  if (!messageId || !sidToken) {
+    return NextResponse.json({ error: 'sidToken and messageId required' }, { status: 400 });
   }
 
   try {
-    const response = await fetch(`${MAIL_TM_BASE}/messages/${messageId}`, {
-      headers: { Authorization: token },
-    });
+    const response = await fetch(
+      `${GM_BASE}?f=fetch_email&email_id=${encodeURIComponent(messageId)}&sid_token=${encodeURIComponent(sidToken)}`
+    );
 
     if (!response.ok) {
       return NextResponse.json({ error: 'Failed to fetch email' }, { status: response.status });
@@ -24,10 +21,9 @@ export async function GET(req: NextRequest) {
 
     const data = await response.json();
     return NextResponse.json({
-      id: data.id,
-      subject: data.subject,
-      text: data.text || '',
-      html: Array.isArray(data.html) ? data.html.join('\n') : data.html || '',
+      id: data.mail_id,
+      subject: data.mail_subject || '',
+      body: data.mail_body || '',
     });
   } catch {
     return NextResponse.json({ error: 'Failed to fetch email' }, { status: 500 });

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 
-const MAIL_TM_BASE = 'https://api.mail.tm';
+const GM_BASE = 'https://api.guerrillamail.com/ajax.php';
 
 function randomString(length: number) {
   return crypto.randomBytes(length).toString('hex').slice(0, length);
@@ -9,46 +9,27 @@ function randomString(length: number) {
 
 export async function POST() {
   try {
-    const domainsRes = await fetch(`${MAIL_TM_BASE}/domains`);
-    if (!domainsRes.ok) {
-      const text = await domainsRes.text();
+    const sessionRes = await fetch(`${GM_BASE}?f=get_email_address`);
+    if (!sessionRes.ok) {
       return NextResponse.json(
-        { error: `Failed to fetch available domains (${domainsRes.status}): ${text.slice(0, 300)}` },
+        { error: 'Failed to start a session with the mail provider' },
         { status: 502 }
       );
     }
-    const domainsData = await domainsRes.json();
-    const domain = domainsData['hydra:member']?.find((d: { isActive: boolean }) => d.isActive)?.domain;
-    if (!domain) {
-      return NextResponse.json({ error: 'No active mail domain available' }, { status: 502 });
-    }
+    const session = await sessionRes.json();
 
-    const address = `test-${randomString(14)}@${domain}`;
-    const password = randomString(20);
-
-    const createRes = await fetch(`${MAIL_TM_BASE}/accounts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address, password }),
-    });
-    if (!createRes.ok) {
-      const text = await createRes.text();
-      return NextResponse.json({ error: `Failed to create inbox: ${text}` }, { status: 502 });
+    const username = `test-${randomString(14)}`;
+    const customRes = await fetch(
+      `${GM_BASE}?f=set_email_user&email_user=${encodeURIComponent(username)}&lang=en&sid_token=${encodeURIComponent(session.sid_token)}`
+    );
+    if (!customRes.ok) {
+      return NextResponse.json({ error: 'Failed to assign a temp email address' }, { status: 502 });
     }
-
-    const tokenRes = await fetch(`${MAIL_TM_BASE}/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address, password }),
-    });
-    if (!tokenRes.ok) {
-      return NextResponse.json({ error: 'Failed to authenticate new inbox' }, { status: 502 });
-    }
-    const { token } = await tokenRes.json();
+    const custom = await customRes.json();
 
     return NextResponse.json({
-      email: address,
-      token,
+      email: custom.email_addr,
+      sidToken: custom.sid_token,
       createdAt: new Date().toISOString(),
     });
   } catch {
