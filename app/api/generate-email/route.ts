@@ -11,7 +11,11 @@ export async function POST() {
   try {
     const domainsRes = await fetch(`${MAIL_TM_BASE}/domains`);
     if (!domainsRes.ok) {
-      return NextResponse.json({ error: 'Failed to fetch available domains' }, { status: 502 });
+      const text = await domainsRes.text();
+      return NextResponse.json(
+        { error: `Failed to fetch available domains (${domainsRes.status}): ${text.slice(0, 300)}` },
+        { status: 502 }
+      );
     }
     const domainsData = await domainsRes.json();
     const domain = domainsData['hydra:member']?.find((d: { isActive: boolean }) => d.isActive)?.domain;
